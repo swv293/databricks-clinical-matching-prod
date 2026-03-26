@@ -1,0 +1,76 @@
+bundle:
+  name: clinical-matching-prod
+
+variables:
+  catalog:
+    default: serverless_stable_swv01_catalog
+  sql_warehouse_id:
+    default: "084543d48aafaeb2"
+
+environments:
+  - environment_key: serverless_env
+    spec:
+      client: "1"
+
+resources:
+  pipelines:
+    clinical_doc_matching_sdp:
+      name: "clinical-doc-matching-sdp"
+      catalog: ${var.catalog}
+      schema: curated
+      serverless: true
+      channel: "PREVIEW"
+      libraries:
+        - file:
+            path: ../pipeline/sdp_pipeline.py
+        - file:
+            path: ../pipeline/pipeline_config.py
+      configuration:
+        catalog: ${var.catalog}
+
+  jobs:
+    clinical_doc_matching_prod:
+      name: "clinical-doc-matching-prod"
+      max_concurrent_runs: 1
+      schedule:
+        quartz_cron_expression: "0 0 * * * ?"
+        timezone_id: "UTC"
+        pause_status: PAUSED
+      tasks:
+        # Task 1: Run the Lakeflow SDP pipeline (incremental)
+        - task_key: sdp_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.clinical_doc_matching_sdp.id}
+            full_refresh: false
+
+        # Task 2: Compute DQ metrics (depends on pipeline)
+        - task_key: refresh_dq_metrics
+          depends_on:
+            - task_key: sdp_pipeline
+          environment_key: serverless_env
+          spark_python_task:
+            python_file: ../post_pipeline/refresh_dq_metrics.py
+
+        # Task 3: Refresh dashboard (depends on DQ passing)
+        - task_key: refresh_dashboard
+          depends_on:
+            - task_key: refresh_dq_metrics
+          environment_key: serverless_env
+          spark_python_task:
+            python_file: ../post_pipeline/refresh_dashboard.py
+
+        # Task 4: Publish to Kafka (parallel with DQ — does NOT block)
+        - task_key: publish_kafka
+          depends_on:
+            - task_key: sdp_pipeline
+          environment_key: serverless_env
+          spark_python_task:
+            python_file: ../kafka/publish_kafka.py
+
+  dashboards:
+    clinical_matching_dq:
+      display_name: "Clinical Document Matching - DQ & Match Dashboard"
+      file_path: ../dashboards/clinical_matching_dq.lvdash.json
+      warehouse_id: ${var.sql_warehouse_id}
+      embed_credentials: false
+      parent_path: /Shared/Clinical-Matching
