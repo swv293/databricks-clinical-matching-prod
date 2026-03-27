@@ -17,7 +17,7 @@ resources:
     clinical_doc_matching_sdp:
       name: "clinical-doc-matching-sdp"
       catalog: ${var.catalog}
-      schema: curated
+      schema: pipeline_prd
       serverless: true
       channel: "PREVIEW"
       libraries:
@@ -68,9 +68,9 @@ resources:
             python_file: ../kafka/publish_kafka.py
 
   dashboards:
-    clinical_matching_dq:
-      display_name: "Clinical Document Matching - DQ & Match Dashboard"
-      file_path: ../dashboards/clinical_matching_dq.lvdash.json
+    clinical_matching_dq_prd:
+      display_name: "Clinical Document Matching - DQ & Match Dashboard (PRD)"
+      file_path: ../dashboards/clinical_matching_dq_prd.lvdash.json
       warehouse_id: ${var.sql_warehouse_id}
       embed_credentials: false
       parent_path: /Shared/Clinical-Matching

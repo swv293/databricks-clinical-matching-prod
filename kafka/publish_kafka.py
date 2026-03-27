@@ -33,11 +33,11 @@ except Exception as e:
 # ── Filter events from the last hour's pipeline run ───────────────────────────
 
 events_to_publish = (
-    spark.table(f"{CATALOG}.analytics.match_events")
+    spark.table(f"{CATALOG}.pipeline_prd.match_events")
     .filter(
-        (F.col("match_classification") != "non_match")
+        (F.col("match_class") != "non_match")
         & (
-            F.col("event_timestamp")
+            F.col("scored_ts")
             >= F.date_trunc("hour", F.current_timestamp() - F.expr("INTERVAL 1 HOUR"))
         )
     )

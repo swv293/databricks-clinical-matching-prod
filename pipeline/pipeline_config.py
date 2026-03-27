@@ -11,6 +11,10 @@ CURATED_SCHEMA   = f"{CATALOG}.curated"
 ANALYTICS_SCHEMA = f"{CATALOG}.analytics"
 DASHBOARD_SCHEMA = f"{CATALOG}.dashboard"
 
+# Production pipeline isolation — SDP pipeline writes here
+PIPELINE_SCHEMA      = f"{CATALOG}.pipeline_prd"
+DASHBOARD_PRD_SCHEMA = f"{CATALOG}.dashboard_prd"
+
 # Fellegi-Sunter decision thresholds
 FS_MATCH_THRESHOLD          = 8.0
 FS_POSSIBLE_MATCH_THRESHOLD = 4.0

@@ -16,7 +16,7 @@ CATALOG = "serverless_stable_swv01_catalog"
 # ── Ensure the DQ results table exists ────────────────────────────────────────
 
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS {CATALOG}.analytics.dq_run_results (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.pipeline_prd.dq_run_results (
         batch_id          TIMESTAMP   COMMENT 'Pipeline run timestamp',
         run_ts            TIMESTAMP   COMMENT 'When this DQ check ran',
         total_docs        BIGINT      COMMENT 'Total documents in this batch',
@@ -34,7 +34,7 @@ spark.sql(f"""
 # ── Ensure the pipeline run log table exists ──────────────────────────────────
 
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS {CATALOG}.analytics.pipeline_run_log (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.pipeline_prd.pipeline_run_log (
         run_ts     TIMESTAMP   COMMENT 'When this run completed',
         status     STRING      COMMENT 'SUCCESS or FAILED',
         run_by     STRING      COMMENT 'User or service principal'
@@ -45,14 +45,14 @@ spark.sql(f"""
 # ── Compute DQ metrics for the latest pipeline run ────────────────────────────
 
 spark.sql(f"""
-    INSERT INTO {CATALOG}.analytics.dq_run_results
+    INSERT INTO {CATALOG}.pipeline_prd.dq_run_results
     WITH parsed AS (
         -- Source: clinical_doc_parsed (parse-level metadata)
         SELECT
             doc_id,
             unreadable_flag,
             parse_error_status
-        FROM {CATALOG}.curated.clinical_doc_parsed
+        FROM {CATALOG}.pipeline_prd.clinical_doc_parsed
     ),
     structured AS (
         -- Source: clinical_doc_structured (LLM-extracted fields with pre-computed DQ flags)
@@ -60,11 +60,11 @@ spark.sql(f"""
             doc_id,
             missing_dob,
             missing_ssn4
-        FROM {CATALOG}.curated.clinical_doc_structured
+        FROM {CATALOG}.pipeline_prd.clinical_doc_structured
     ),
     matches AS (
         SELECT doc_id, match_classification AS match_class
-        FROM {CATALOG}.analytics.doc_member_match_candidates
+        FROM {CATALOG}.pipeline_prd.doc_member_match_candidates
     )
     SELECT
         CURRENT_TIMESTAMP()                                                           AS batch_id,
@@ -96,7 +96,7 @@ DQ_MAX_MISSING_SSN4_PCT = 30.0
 
 latest = spark.sql(f"""
     SELECT pct_unreadable, pct_missing_dob, pct_missing_ssn4
-    FROM   {CATALOG}.analytics.dq_run_results
+    FROM   {CATALOG}.pipeline_prd.dq_run_results
     ORDER  BY run_ts DESC
     LIMIT  1
 """).first()
@@ -111,7 +111,7 @@ failed = [msg for msg, breached in breaches.items() if breached]
 if failed:
     # Log failure
     spark.sql(f"""
-        INSERT INTO {CATALOG}.analytics.pipeline_run_log
+        INSERT INTO {CATALOG}.pipeline_prd.pipeline_run_log
         VALUES (CURRENT_TIMESTAMP(), 'DQ_BREACH', CURRENT_USER())
     """)
     raise Exception(f"DQ BREACH — pipeline halted: {', '.join(failed)}")
