@@ -191,6 +191,7 @@ def clinical_doc_parsed():
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 6
 @dp.table(
     name="clinical_doc_structured",
     comment="LLM-extracted structured identifiers from parsed clinical documents",
@@ -217,13 +218,23 @@ def clinical_doc_structured():
                         'auth_id, provider_name. Use null for any field not found.\n\n',
                         'Document text:\n"""', raw_text, '"""'
                     ),
-                    responseFormat => 'STRUCT<
+                    responseFormat => 'STRUCT<result: STRUCT<
                         first_name:STRING, last_name:STRING, dob:STRING,
                         ssn4:STRING, member_id_on_form:STRING,
-                        auth_id:STRING, provider_name:STRING>'
+                        auth_id:STRING, provider_name:STRING>>'
                 )
             """),
         )
+        # Parse the JSON string returned by ai_query into a STRUCT
+        .withColumn(
+            "s",
+            F.from_json(
+                F.col("s"),
+                "result STRUCT<first_name:STRING, last_name:STRING, dob:STRING, ssn4:STRING, member_id_on_form:STRING, auth_id:STRING, provider_name:STRING>"
+            )
+        )
+        # Unwrap the single top-level field required by ai_query responseFormat
+        .withColumn("s", F.col("s.result"))
         .select(
             F.col("doc_id"),
             F.col("path"),
@@ -290,6 +301,7 @@ def doc_member_pairs_features():
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 10
 @dp.table(
     name="doc_auth_pairs_features",
     comment="Blocked candidate pairs: documents × authorizations with similarity features",
@@ -300,7 +312,8 @@ def doc_auth_pairs_features():
     auths = spark.table(f"{RAW_SCHEMA}.authorization").alias("a")
     members = spark.table(f"{REF_SCHEMA}.member").alias("m")
     # Enrich auths with member demographics for name comparison
-    auths_enriched = auths.join(members, F.col("a.member_id") == F.col("m.member_id"), "inner")
+    # Use string join key to auto-deduplicate the shared member_id column
+    auths_enriched = auths.join(members, "member_id", "inner")
     return (
         docs.alias("d")
         .join(
@@ -312,7 +325,7 @@ def doc_auth_pairs_features():
             )
             | (
                 F.col("d.member_id_on_form").isNotNull()
-                & (F.col("d.member_id_on_form") == F.col("am.`a.member_id`"))
+                & (F.col("d.member_id_on_form") == F.col("am.member_id"))
             ),
             "inner",
         )

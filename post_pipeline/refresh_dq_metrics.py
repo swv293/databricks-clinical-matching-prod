@@ -8,6 +8,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 2
 from pyspark.sql import functions as F
 
 CATALOG = "serverless_stable_swv01_catalog"
@@ -46,19 +47,20 @@ spark.sql(f"""
 spark.sql(f"""
     INSERT INTO {CATALOG}.analytics.dq_run_results
     WITH parsed AS (
+        -- Source: clinical_doc_parsed (parse-level metadata)
         SELECT
             doc_id,
             unreadable_flag,
-            parse_error_status,
-            parse_confidence
+            parse_error_status
         FROM {CATALOG}.curated.clinical_doc_parsed
     ),
     structured AS (
+        -- Source: clinical_doc_structured (LLM-extracted fields with pre-computed DQ flags)
         SELECT
             doc_id,
-            CASE WHEN extracted_dob IS NULL THEN true ELSE false END AS missing_dob,
-            CASE WHEN extracted_ssn4 IS NULL OR extracted_ssn4 = '' THEN true ELSE false END AS missing_ssn4
-        FROM {CATALOG}.curated.clinical_doc_parsed
+            missing_dob,
+            missing_ssn4
+        FROM {CATALOG}.curated.clinical_doc_structured
     ),
     matches AS (
         SELECT doc_id, match_classification AS match_class
