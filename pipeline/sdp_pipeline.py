@@ -117,6 +117,11 @@ def jw_udf(a, b):
     return float(_jaro_winkler(a or "", b or ""))
 
 
+# ── Run-mode logging ──────────────────────────────────────────────────────────
+_is_full_refresh = spark.conf.get("spark.databricks.dlt.fullRefresh", "false") == "true"
+print(f"Pipeline mode: {'FULL REFRESH' if _is_full_refresh else 'INCREMENTAL'}")
+print(f"Volume path: {VOLUME_PATH}")
+
 # Register as SQL-callable UDF for use in expressions
 spark.udf.register("jw_sim", jw_udf, DoubleType())
 
@@ -138,6 +143,8 @@ spark.udf.register("jw_sim", jw_udf, DoubleType())
 )
 @dp.expect("doc_id_present", "doc_id IS NOT NULL")
 @dp.expect("path_present", "path IS NOT NULL")
+@dp.expect("raw_text_or_unreadable", "raw_text IS NOT NULL OR unreadable_flag = true")
+@dp.expect("valid_ingest_ts", "ingest_ts IS NOT NULL")
 def clinical_doc_parsed():
     return (
         spark.readStream
@@ -202,6 +209,9 @@ def clinical_doc_parsed():
     "has_extracted_field",
     "first_name IS NOT NULL OR last_name IS NOT NULL OR dob IS NOT NULL",
 )
+@dp.expect("valid_dob_format", "dob IS NULL OR (dob >= '1900-01-01' AND dob <= current_date())")
+@dp.expect("valid_ssn4_format", "ssn4 IS NULL OR (length(ssn4) = 4 AND ssn4 RLIKE '^[0-9]{4}$')")
+@dp.expect_or_drop("no_all_nulls", "first_name IS NOT NULL OR last_name IS NOT NULL OR dob IS NOT NULL OR ssn4 IS NOT NULL")
 def clinical_doc_structured():
     return (
         dp.read_stream("clinical_doc_parsed")
@@ -268,6 +278,8 @@ def clinical_doc_structured():
     comment="Blocked candidate pairs: documents × members with Jaro-Winkler similarity features",
 )
 @dp.expect_or_drop("valid_pair", "doc_id IS NOT NULL AND member_id IS NOT NULL")
+@dp.expect("valid_similarity_scores", "first_name_sim BETWEEN 0 AND 1 AND last_name_sim BETWEEN 0 AND 1")
+@dp.expect("valid_exact_flags", "ssn4_exact IN (0, 1) AND dob_exact IN (0, 1)")
 def doc_member_pairs_features():
     docs = dp.read_stream("clinical_doc_structured")
     members = spark.table(f"{REF_SCHEMA}.member")
@@ -307,6 +319,8 @@ def doc_member_pairs_features():
     comment="Blocked candidate pairs: documents × authorizations with similarity features",
 )
 @dp.expect_or_drop("valid_pair", "doc_id IS NOT NULL AND auth_id IS NOT NULL")
+@dp.expect("valid_similarity_scores_auth", "first_name_sim BETWEEN 0 AND 1 AND last_name_sim BETWEEN 0 AND 1")
+@dp.expect("valid_exact_flags_auth", "ssn4_exact IN (0, 1) AND dob_exact IN (0, 1)")
 def doc_auth_pairs_features():
     docs = dp.read_stream("clinical_doc_structured")
     auths = spark.table(f"{RAW_SCHEMA}.authorization").alias("a")
@@ -389,6 +403,9 @@ def _apply_fs_weights(df):
     name="doc_member_match_candidates",
     comment="Fellegi-Sunter scored member match candidates with classification",
 )
+@dp.expect("valid_weight", "total_weight IS NOT NULL")
+@dp.expect("valid_classification", "match_class IN ('match', 'possible_match', 'non_match')")
+@dp.expect_or_fail("weight_class_consistent", "NOT (match_class = 'match' AND total_weight < 4.0)")
 def doc_member_match_candidates():
     return _apply_fs_weights(dp.read_stream("doc_member_pairs_features"))
 
@@ -403,6 +420,9 @@ def doc_member_match_candidates():
     name="doc_auth_match_candidates",
     comment="Fellegi-Sunter scored auth match candidates with classification",
 )
+@dp.expect("valid_weight_auth", "total_weight IS NOT NULL")
+@dp.expect("valid_classification_auth", "match_class IN ('match', 'possible_match', 'non_match')")
+@dp.expect_or_fail("weight_class_consistent_auth", "NOT (match_class = 'match' AND total_weight < 4.0)")
 def doc_auth_match_candidates():
     return _apply_fs_weights(dp.read_stream("doc_auth_pairs_features"))
 

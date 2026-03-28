@@ -43,10 +43,18 @@ resources:
             pipeline_id: ${resources.pipelines.clinical_doc_matching_sdp.id}
             full_refresh: false
 
-        # Task 2: Compute DQ metrics (depends on pipeline)
-        - task_key: refresh_dq_metrics
+        # Task 2: Validate pipeline integrity (depends on pipeline)
+        - task_key: validate_pipeline
           depends_on:
             - task_key: sdp_pipeline
+          environment_key: serverless_env
+          spark_python_task:
+            python_file: ../post_pipeline/validate_pipeline.py
+
+        # Task 3: Compute DQ metrics (depends on validation)
+        - task_key: refresh_dq_metrics
+          depends_on:
+            - task_key: validate_pipeline
           environment_key: serverless_env
           spark_python_task:
             python_file: ../post_pipeline/refresh_dq_metrics.py
