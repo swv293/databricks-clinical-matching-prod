@@ -46,7 +46,7 @@
       "name": "ds_dq_thresholds",
       "displayName": "DQ Thresholds",
       "queryLines": [
-        "SELECT 'Pct Unreadable' AS check_name, ROUND(100.0*SUM(CASE WHEN unreadable_flag THEN 1 ELSE 0 END)/COUNT(*),2) AS value, '< 15%' AS threshold, CASE WHEN 100.0*SUM(CASE WHEN unreadable_flag THEN 1 ELSE 0 END)/COUNT(*) < 15 THEN 'PASS' ELSE 'FAIL' END AS status FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed UNION ALL SELECT 'Pct Missing DOB', ROUND(100.0*SUM(CASE WHEN extracted_dob IS NULL THEN 1 ELSE 0 END)/COUNT(*),2), '< 20%', CASE WHEN 100.0*SUM(CASE WHEN extracted_dob IS NULL THEN 1 ELSE 0 END)/COUNT(*) < 20 THEN 'PASS' ELSE 'FAIL' END FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed WHERE unreadable_flag=false UNION ALL SELECT 'Pct Missing SSN4', ROUND(100.0*SUM(CASE WHEN extracted_ssn4 IS NULL OR extracted_ssn4='' THEN 1 ELSE 0 END)/COUNT(*),2), '< 25%', CASE WHEN 100.0*SUM(CASE WHEN extracted_ssn4 IS NULL OR extracted_ssn4='' THEN 1 ELSE 0 END)/COUNT(*) < 25 THEN 'PASS' ELSE 'FAIL' END FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed WHERE unreadable_flag=false UNION ALL SELECT 'Avg Parse Confidence', ROUND(AVG(parse_confidence),3), '> 0.7', CASE WHEN AVG(parse_confidence) > 0.7 THEN 'PASS' ELSE 'FAIL' END FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed WHERE unreadable_flag=false"
+        "SELECT 'Pct Unreadable' AS check_name, ROUND(100.0*SUM(CASE WHEN unreadable_flag THEN 1 ELSE 0 END)/COUNT(*),2) AS value, '< 15%' AS threshold, CASE WHEN 100.0*SUM(CASE WHEN unreadable_flag THEN 1 ELSE 0 END)/COUNT(*) < 15 THEN 'PASS' ELSE 'FAIL' END AS status FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed UNION ALL SELECT 'Pct Missing DOB', ROUND(100.0*SUM(CASE WHEN missing_dob THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), '< 95%', CASE WHEN 100.0*SUM(CASE WHEN missing_dob THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0) < 95 THEN 'PASS' ELSE 'FAIL' END FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_structured UNION ALL SELECT 'Pct Missing SSN4', ROUND(100.0*SUM(CASE WHEN missing_ssn4 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2), '< 95%', CASE WHEN 100.0*SUM(CASE WHEN missing_ssn4 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0) < 95 THEN 'PASS' ELSE 'FAIL' END FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_structured UNION ALL SELECT 'Total Docs Parsed', CAST(COUNT(*) AS STRING), 'n/a', 'INFO' FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_parsed UNION ALL SELECT 'Total Structured', CAST(COUNT(*) AS STRING), 'n/a', 'INFO' FROM serverless_stable_swv01_catalog.pipeline_prd.clinical_doc_structured"
       ]
     },
     {
@@ -75,6 +75,34 @@
       "displayName": "F-S Parameters",
       "queryLines": [
         "SELECT field_name, m_probability, u_probability, ROUND(agreement_weight,2) AS agreement_weight, ROUND(disagreement_weight,2) AS disagreement_weight, field_weight_multiplier FROM serverless_stable_swv01_catalog.pipeline_prd.fellegi_sunter_parameters ORDER BY agreement_weight DESC"
+      ]
+    },
+    {
+      "name": "ds_batch_metrics",
+      "displayName": "Batch Metrics",
+      "queryLines": [
+        "SELECT * FROM serverless_stable_swv01_catalog.dashboard_prd.v_batch_metrics ORDER BY batch_date"
+      ]
+    },
+    {
+      "name": "ds_batch_extraction",
+      "displayName": "Batch Extraction",
+      "queryLines": [
+        "SELECT * FROM serverless_stable_swv01_catalog.dashboard_prd.v_batch_extraction_metrics ORDER BY batch_date"
+      ]
+    },
+    {
+      "name": "ds_batch_matches",
+      "displayName": "Batch Matches",
+      "queryLines": [
+        "SELECT * FROM serverless_stable_swv01_catalog.dashboard_prd.v_batch_match_metrics ORDER BY batch_date, match_class"
+      ]
+    },
+    {
+      "name": "ds_dq_run_history",
+      "displayName": "DQ Run History",
+      "queryLines": [
+        "SELECT batch_id, total_docs, pct_unreadable, pct_missing_dob, pct_missing_ssn4, pct_match, pct_possible_match, pct_non_match FROM serverless_stable_swv01_catalog.pipeline_prd.dq_run_results ORDER BY run_ts DESC LIMIT 20"
       ]
     }
   ],
@@ -835,6 +863,221 @@
             "y": 7,
             "width": 3,
             "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "batch_comparison",
+      "displayName": "Batch Comparison",
+      "layout": [
+        {
+          "widget": {
+            "name": "batch_docs_parsed",
+            "queries": [
+              {
+                "name": "q",
+                "query": {
+                  "datasetName": "ds_batch_metrics",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "batch_date",
+                      "expression": "`batch_date`"
+                    },
+                    {
+                      "name": "docs_parsed",
+                      "expression": "`docs_parsed`"
+                    },
+                    {
+                      "name": "unreadable",
+                      "expression": "`unreadable`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "batch_date",
+                  "displayName": "Batch Date"
+                },
+                "y": {
+                  "fieldName": "docs_parsed",
+                  "displayName": "Docs Parsed"
+                }
+              }
+            },
+            "displayName": "Documents Parsed per Batch"
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "batch_extraction",
+            "queries": [
+              {
+                "name": "q",
+                "query": {
+                  "datasetName": "ds_batch_extraction",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "batch_date",
+                      "expression": "`batch_date`"
+                    },
+                    {
+                      "name": "docs_extracted",
+                      "expression": "`docs_extracted`"
+                    },
+                    {
+                      "name": "missing_dob",
+                      "expression": "`missing_dob`"
+                    },
+                    {
+                      "name": "missing_ssn4",
+                      "expression": "`missing_ssn4`"
+                    },
+                    {
+                      "name": "extraction_rate",
+                      "expression": "`extraction_rate`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "table"
+            },
+            "displayName": "Extraction Quality per Batch"
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "batch_matches",
+            "queries": [
+              {
+                "name": "q",
+                "query": {
+                  "datasetName": "ds_batch_matches",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "batch_date",
+                      "expression": "`batch_date`"
+                    },
+                    {
+                      "name": "match_class",
+                      "expression": "`match_class`"
+                    },
+                    {
+                      "name": "pair_count",
+                      "expression": "`pair_count`"
+                    },
+                    {
+                      "name": "avg_weight",
+                      "expression": "`avg_weight`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "batch_date",
+                  "displayName": "Batch"
+                },
+                "y": {
+                  "fieldName": "pair_count",
+                  "displayName": "Pairs"
+                },
+                "color": {
+                  "fieldName": "match_class",
+                  "displayName": "Match Class"
+                }
+              }
+            },
+            "displayName": "Match Distribution per Batch"
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "dq_run_history",
+            "queries": [
+              {
+                "name": "q",
+                "query": {
+                  "datasetName": "ds_dq_run_history",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "batch_id",
+                      "expression": "`batch_id`"
+                    },
+                    {
+                      "name": "total_docs",
+                      "expression": "`total_docs`"
+                    },
+                    {
+                      "name": "pct_unreadable",
+                      "expression": "`pct_unreadable`"
+                    },
+                    {
+                      "name": "pct_missing_dob",
+                      "expression": "`pct_missing_dob`"
+                    },
+                    {
+                      "name": "pct_missing_ssn4",
+                      "expression": "`pct_missing_ssn4`"
+                    },
+                    {
+                      "name": "pct_match",
+                      "expression": "`pct_match`"
+                    },
+                    {
+                      "name": "pct_possible_match",
+                      "expression": "`pct_possible_match`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "table"
+            },
+            "displayName": "DQ Run History"
+          },
+          "position": {
+            "x": 3,
+            "y": 4,
+            "width": 3,
+            "height": 4
           }
         }
       ],
