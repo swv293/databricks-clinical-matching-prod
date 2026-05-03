@@ -2,7 +2,7 @@
 
 End-to-end Lakeflow Streaming Declarative Pipeline (SDP) for clinical document matching: incremental ingest from a Unity Catalog volume, AI-powered OCR + structured extraction, parallel Fellegi-Sunter probabilistic matching for members and authorizations, and a fan-in event log — all serverless, all governed by data-quality expectations.
 
-> **Companion repo:** [`interop-demo`](https://github.com/swami-venkatesh_data/interop-demo) is the **learn-and-explore surface** — synthetic data generators, the seven-notebook walkthrough, full DDL, dashboards, a Genie space, and the OpenAPI spec for downstream consumers. Use that repo first to populate `ref.member` and `raw.authorization` (this pipeline reads from those). Use **this** repo to deploy the same logic in streaming, production-shaped form.
+> **Companion repo:** [`interop-demo`](https://github.com/swv293/interop-demo) is the **learn-and-explore surface** — synthetic data generators, the seven-notebook walkthrough, full DDL, dashboards, a Genie space, and the OpenAPI spec for downstream consumers. Use that repo first to populate `ref.member` and `raw.authorization` (this pipeline reads from those). Use **this** repo to deploy the same logic in streaming, production-shaped form.
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
 
@@ -35,7 +35,7 @@ All tables live in the `pipeline_prd` schema. Dashboard-ready views live in `das
    - `<catalog>.ref.member` (golden master)
    - `<catalog>.raw.authorization` (open authorizations)
 
-   **If those tables don't exist yet**, run notebook `01_ingest_seed_data.py` from the [interop-demo](https://github.com/swami-venkatesh_data/interop-demo) repo first. It seeds 1,000 members and 3,000 authorizations from the included synthetic CSVs.
+   **If those tables don't exist yet**, run notebook `01_ingest_seed_data.py` from the [interop-demo](https://github.com/swv293/interop-demo) repo first. It seeds 1,000 members and 3,000 authorizations from the included synthetic CSVs.
 4. **A UC volume** to drop documents into. Default path: `/Volumes/<catalog>/raw/raw_docs/clinical_docs`. Generate sample PDFs/TIFFs with `data/generation/generate_pdfs.py` from the companion repo.
 
 ## Repository Layout
